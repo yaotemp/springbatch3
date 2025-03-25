@@ -2,6 +2,8 @@ package com.example.dataexport.config;
 
 import org.springframework.batch.core.partition.support.Partitioner;
 import org.springframework.batch.item.ExecutionContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -15,8 +17,9 @@ public class UserPartitioner implements Partitioner {
     private final JdbcTemplate jdbcTemplate;
     private final int gridSize;
 
-    public UserPartitioner(DataSource dataSource) {
-        this.jdbcTemplate = new JdbcTemplate(dataSource);
+    @Autowired
+    public UserPartitioner(@Qualifier("appDataSource") DataSource appDataSource) {
+        this.jdbcTemplate = new JdbcTemplate(appDataSource);
         this.gridSize = 4; // Default number of partitions
     }
 

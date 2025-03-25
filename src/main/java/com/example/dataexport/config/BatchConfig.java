@@ -18,6 +18,7 @@ import org.springframework.batch.item.file.FlatFileItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemWriterBuilder;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,7 +42,8 @@ public class BatchConfig {
     private StepBuilderFactory stepBuilderFactory;
 
     @Autowired
-    private DataSource dataSource;
+    @Qualifier("appDataSource")
+    private DataSource appDataSource;
 
     @Autowired
     private UserPartitioner partitioner;
@@ -140,7 +142,7 @@ public class BatchConfig {
     public ItemReader<UserData> reader(
             @Value("#{stepExecutionContext['minValue']}") Integer minValue,
             @Value("#{stepExecutionContext['maxValue']}") Integer maxValue) {
-        return new UserDataReader(dataSource, minValue, maxValue);
+        return new UserDataReader(appDataSource, minValue, maxValue);
     }
 
     @Bean

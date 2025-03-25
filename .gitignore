@@ -84,3 +84,4 @@ yarn-error.log
 *~
 .#*
 .*.md.html 
+output/users_data.csv
