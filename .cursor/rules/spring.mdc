@@ -1,0 +1,141 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Spring Batch Project Rules
+
+You are an expert in Spring Batch, Java programming, Spring Boot, and enterprise batch processing solutions.
+
+## Code Style and Structure
+- Implement clean, modular batch job configurations with clear step definitions
+- Use Spring Batch metadata tables for job tracking and management
+- Structure applications with clear separation of:
+  - Job configurations
+  - Step definitions
+  - Item readers/processors/writers
+  - Tasklets
+  - Listeners
+  - Exception handlers
+
+## Spring Batch Specifics
+- Use `@Configuration` for job/step configurations
+- Implement proper chunk processing configuration
+- Use appropriate skip/retry policies
+- Utilize Spring Batch listeners for lifecycle events
+- Implement proper transaction management
+- Use job parameters correctly with appropriate scope
+
+## Naming Conventions
+- Use `XxxJobConfig` for job configuration classes
+- Use `XxxStep` for step definitions
+- Suffix readers/processors/writers with type (e.g. `UserItemReader`)
+- Use `XxxListener` for listener implementations
+- Follow Spring Batch naming conventions for meta tables
+
+## Job Configuration
+- Use `JobBuilderFactory` and `StepBuilderFactory` properly
+- Implement restartability configuration
+- Configure proper transaction isolation levels
+- Use appropriate commit intervals for chunk processing
+- Implement job parameter validation
+
+## Error Handling
+- Implement skip/retry policies with `SkipPolicy`/`RetryPolicy`
+- Use `@ExceptionHandler` in listeners
+- Configure transactional error handling
+- Implement proper job failure handling and recovery
+- Use batch meta tables for error tracking
+
+## Performance Optimization
+- Implement parallel processing with `AsyncTaskExecutor`
+- Use partitioning for large datasets
+- Optimize chunk size based on processing requirements
+- Implement proper connection pooling
+- Use JPA/Hibernate batch processing optimizations
+
+## Data Access
+- Use `JdbcCursorItemReader` vs `JpaPagingItemReader` appropriately
+- Implement proper transaction management for writers
+- Use bulk operations for database writes
+- Implement repository pattern for complex data access
+
+## Testing
+- Write unit tests for individual components
+- Use `JobLauncherTestUtils` for job testing
+- Implement integration tests with `@SpringBatchTest`
+- Use `JobRepositoryTestUtils` for test cleanup
+- Test job restart scenarios
+
+## Monitoring
+- Use Spring Batch Admin or Spring Cloud Task
+- Expose batch metrics via Spring Boot Actuator
+- Implement custom job execution listeners
+- Use Spring Batch metadata for monitoring
+- Log job progress with MDC (Mapped Diagnostic Context)
+
+## Security
+- Secure job execution endpoints
+- Implement proper credential management for tasklets
+- Secure access to batch meta tables
+- Use Spring Security for job execution authorization
+
+## Logging
+- Implement structured logging for job tracking
+- Log chunk processing statistics
+- Use correlation IDs for job instances
+- Implement audit logging for critical operations
+
+## Job Scheduling
+- Use `@Scheduled` for fixed-time jobs
+- Implement dynamic job launching via REST API
+- Use Quartz scheduler for complex scheduling needs
+- Implement proper cluster-aware scheduling
+
+## File Handling
+- Implement robust file validation
+- Use `FlatFileItemReader` with proper configuration
+- Handle encoding and format exceptions
+- Implement file cleanup strategies
+- Use temp directories appropriately
+
+## Transaction Management
+- Configure proper isolation levels
+- Implement savepoint strategies
+- Handle transaction rollbacks properly
+- Use chunk-oriented transaction boundaries
+
+## Best Practices
+- Keep jobs and steps atomic
+- Implement idempotent writers
+- Use proper job versioning
+- Document job dependencies
+- Implement proper resource cleanup
+- Use Spring Batch BOM for dependency management
+
+## Performance Checklist
+- Optimize reader queries with proper indexing
+- Implement processor caching where appropriate
+- Use async item processing where possible
+- Monitor memory usage for large datasets
+- Implement proper garbage collection tuning
+
+## Advanced Features
+- Implement custom `JobExecutionDecider`
+- Use Spring Batch Integration for remote partitioning
+- Implement fault-tolerant job configurations
+- Use Spring Cloud Task for distributed execution
+- Implement custom batch meta data extensions
+
+## Documentation
+- Document job flow with mermaid diagrams
+- Maintain job parameter documentation
+- Document error handling strategies
+- Provide restart/recovery procedures
+- Maintain job dependency matrix
+
+## Configuration and Properties
+- **H2 Database Configuration**
+  - Configure H2 as Spring Batch metadata store using file-based persistence mode
+ 
+Adhere to Spring Batch best practices and patterns from "Spring Batch in Action". Maintain proper separation of concerns between batch infrastructure and business logic.
