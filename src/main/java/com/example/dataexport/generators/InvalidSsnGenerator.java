@@ -6,26 +6,23 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.HashSet;
 import java.util.Random;
-import java.util.Set;
 
 public class InvalidSsnGenerator {
 
     private static final String OUTPUT_FILE_PREFIX = "all_invalid_ssns_part_";
     private static final String OUTPUT_FILE_SUFFIX = ".txt";
-    private static final long TARGET_COUNT = 250_000_000L;
+    private static final long TARGET_COUNT = 300_000_000L;
     private static final int RECORDS_PER_FILE = 10_000_000;
     private static final char[] UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
     private static final Random RANDOM = new Random();
 
     public static void main(String[] args) {
-        System.out.println("Starting generation of 250 million invalid SSNs (all-digit and alpha-numeric). Each file: 10 million records.");
+        System.out.println("Starting generation of 300 million invalid SSNs (all-digit and alpha-numeric, duplicates allowed for alpha-numeric). Each file: 10 million records.");
 
         long invalidSsnCounter = 0;
         long checkedSsnCounter = 0;
         long startTime = System.currentTimeMillis();
-        Set<String> seen = new HashSet<>(1_000_000); // Only used for alpha-numeric to avoid duplicates
         int fileIndex = 1;
         int recordInFile = 0;
         BufferedWriter writer = null;
@@ -64,7 +61,7 @@ public class InvalidSsnGenerator {
                     }
                 }
             }
-            // 2. If not enough, generate random alpha-numeric invalid SSNs
+            // 2. If not enough, generate random alpha-numeric invalid SSNs (duplicates allowed)
             while (invalidSsnCounter < TARGET_COUNT) {
                 char first = UPPERCASE[RANDOM.nextInt(UPPERCASE.length)];
                 int d2 = RANDOM.nextInt(10);
@@ -76,23 +73,21 @@ public class InvalidSsnGenerator {
                 int s3 = RANDOM.nextInt(10);
                 int s4 = RANDOM.nextInt(10);
                 String ssn = String.format("%c%1d%1d-%1d%1d-%1d%1d%1d%1d", first, d2, d3, g1, g2, s1, s2, s3, s4);
-                if (seen.add(ssn)) {
-                    writer.write(ssn + "\n");
-                    invalidSsnCounter++;
-                    recordInFile++;
-                    if (invalidSsnCounter % 1_000_000 == 0) {
-                        logProgress("Alpha-numeric", invalidSsnCounter, startTime, fileIndex);
-                    }
-                    if (recordInFile >= RECORDS_PER_FILE) {
-                        writer.flush();
-                        writer.close();
-                        fileIndex++;
-                        if (invalidSsnCounter < TARGET_COUNT) {
-                            writer = new BufferedWriter(new FileWriter(getFileName(fileIndex)));
-                            recordInFile = 0;
-                        } else {
-                            break;
-                        }
+                writer.write(ssn + "\n");
+                invalidSsnCounter++;
+                recordInFile++;
+                if (invalidSsnCounter % 1_000_000 == 0) {
+                    logProgress("Alpha-numeric", invalidSsnCounter, startTime, fileIndex);
+                }
+                if (recordInFile >= RECORDS_PER_FILE) {
+                    writer.flush();
+                    writer.close();
+                    fileIndex++;
+                    if (invalidSsnCounter < TARGET_COUNT) {
+                        writer = new BufferedWriter(new FileWriter(getFileName(fileIndex)));
+                        recordInFile = 0;
+                    } else {
+                        break;
                     }
                 }
             }
