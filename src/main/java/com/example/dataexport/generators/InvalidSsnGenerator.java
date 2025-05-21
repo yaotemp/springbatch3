@@ -12,20 +12,26 @@ import java.util.Set;
 
 public class InvalidSsnGenerator {
 
-    private static final String OUTPUT_FILE_NAME = "all_invalid_ssns.txt";
+    private static final String OUTPUT_FILE_PREFIX = "all_invalid_ssns_part_";
+    private static final String OUTPUT_FILE_SUFFIX = ".txt";
     private static final long TARGET_COUNT = 250_000_000L;
+    private static final int RECORDS_PER_FILE = 10_000_000;
     private static final char[] UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
     private static final Random RANDOM = new Random();
 
     public static void main(String[] args) {
-        System.out.println("Starting generation of 250 million invalid SSNs (all-digit and alpha-numeric). Output file: " + Paths.get(OUTPUT_FILE_NAME).toAbsolutePath());
+        System.out.println("Starting generation of 250 million invalid SSNs (all-digit and alpha-numeric). Each file: 10 million records.");
 
         long invalidSsnCounter = 0;
         long checkedSsnCounter = 0;
         long startTime = System.currentTimeMillis();
         Set<String> seen = new HashSet<>(1_000_000); // Only used for alpha-numeric to avoid duplicates
+        int fileIndex = 1;
+        int recordInFile = 0;
+        BufferedWriter writer = null;
 
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(OUTPUT_FILE_NAME))) {
+        try {
+            writer = new BufferedWriter(new FileWriter(getFileName(fileIndex)));
             // 1. Generate all all-digit invalid SSNs
             outer:
             for (int area = 0; area <= 999; area++) {
@@ -36,8 +42,20 @@ public class InvalidSsnGenerator {
                             String ssn = String.format("%03d-%02d-%04d", area, group, serial);
                             writer.write(ssn + "\n");
                             invalidSsnCounter++;
+                            recordInFile++;
                             if (invalidSsnCounter % 1_000_000 == 0) {
-                                logProgress("All-digit", invalidSsnCounter, startTime);
+                                logProgress("All-digit", invalidSsnCounter, startTime, fileIndex);
+                            }
+                            if (recordInFile >= RECORDS_PER_FILE) {
+                                writer.flush();
+                                writer.close();
+                                fileIndex++;
+                                if (invalidSsnCounter < TARGET_COUNT) {
+                                    writer = new BufferedWriter(new FileWriter(getFileName(fileIndex)));
+                                    recordInFile = 0;
+                                } else {
+                                    break outer;
+                                }
                             }
                             if (invalidSsnCounter >= TARGET_COUNT) {
                                 break outer;
@@ -58,33 +76,51 @@ public class InvalidSsnGenerator {
                 int s3 = RANDOM.nextInt(10);
                 int s4 = RANDOM.nextInt(10);
                 String ssn = String.format("%c%1d%1d-%1d%1d-%1d%1d%1d%1d", first, d2, d3, g1, g2, s1, s2, s3, s4);
-                // Avoid duplicates with all-digit set (not strictly needed, but avoid within alpha-numeric)
                 if (seen.add(ssn)) {
                     writer.write(ssn + "\n");
                     invalidSsnCounter++;
+                    recordInFile++;
                     if (invalidSsnCounter % 1_000_000 == 0) {
-                        logProgress("Alpha-numeric", invalidSsnCounter, startTime);
+                        logProgress("Alpha-numeric", invalidSsnCounter, startTime, fileIndex);
+                    }
+                    if (recordInFile >= RECORDS_PER_FILE) {
+                        writer.flush();
+                        writer.close();
+                        fileIndex++;
+                        if (invalidSsnCounter < TARGET_COUNT) {
+                            writer = new BufferedWriter(new FileWriter(getFileName(fileIndex)));
+                            recordInFile = 0;
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
-            writer.flush();
-            logCompletion(invalidSsnCounter, startTime);
+            if (writer != null) {
+                writer.flush();
+                writer.close();
+            }
+            logCompletion(invalidSsnCounter, startTime, fileIndex);
         } catch (IOException e) {
             System.err.println("An error occurred while writing to the file: " + e.getMessage());
             e.printStackTrace();
         }
-        System.out.println("Output file located at: " + Paths.get(OUTPUT_FILE_NAME).toAbsolutePath());
+        System.out.println("Output files: " + OUTPUT_FILE_PREFIX + "*" + OUTPUT_FILE_SUFFIX);
     }
 
-    private static void logProgress(String stage, long count, long startTime) {
-        long now = System.currentTimeMillis();
-        double elapsed = (now - startTime) / 1000.0;
-        System.out.printf("[%s] Generated: %d, Elapsed: %.2f sec\n", stage, count, elapsed);
+    private static String getFileName(int fileIndex) {
+        return OUTPUT_FILE_PREFIX + fileIndex + OUTPUT_FILE_SUFFIX;
     }
 
-    private static void logCompletion(long count, long startTime) {
+    private static void logProgress(String stage, long count, long startTime, int fileIndex) {
         long now = System.currentTimeMillis();
         double elapsed = (now - startTime) / 1000.0;
-        System.out.printf("--- Generation Complete ---\nTotal generated: %d\nTotal time: %.2f sec (%.2f min)\n", count, elapsed, elapsed / 60.0);
+        System.out.printf("[%s] Generated: %d, Elapsed: %.2f sec, File: %d\n", stage, count, elapsed, fileIndex);
+    }
+
+    private static void logCompletion(long count, long startTime, int fileIndex) {
+        long now = System.currentTimeMillis();
+        double elapsed = (now - startTime) / 1000.0;
+        System.out.printf("--- Generation Complete ---\nTotal generated: %d\nTotal files: %d\nTotal time: %.2f sec (%.2f min)\n", count, fileIndex, elapsed, elapsed / 60.0);
     }
 } 
