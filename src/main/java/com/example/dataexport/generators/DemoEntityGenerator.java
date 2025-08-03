@@ -13,13 +13,30 @@ public class DemoEntityGenerator {
     private static final Faker faker = new Faker(new Locale("en-US"));
     private static final Provider provider = new Provider();
 
+    /**
+     * Overloaded method to generate a DemoEntity with a random type ('I' or 'B').
+     * This preserves the original behavior for existing callers.
+     */
     public static DemoEntity generateDemoEntity() {
+        // Randomly choose between "I" (Individual) and "B" (Business)
+        String randomEntityType = faker.options().option("I", "B");
+        return generateDemoEntity(randomEntityType);
+    }
+
+    /**
+     * Generates a DemoEntity of a specific type (Individual or Business).
+     *
+     * @param entityType A string indicating the type of entity to generate.
+     *                   "B" for Business, "I" (or any other value) for Individual.
+     * @return A newly generated DemoEntity object.
+     */
+    public static DemoEntity generateDemoEntity(String entityType) {
         DemoEntity demoEntity = new DemoEntity();
 
         demoEntity.setId(faker.number().randomDigitNotZero());
-        demoEntity.setEntityType(faker.options().option("I", "B"));
+        demoEntity.setEntityType(entityType);
 
-        if ("B".equals(demoEntity.getEntityType())) {
+        if ("B".equals(entityType)) {
             // Business-specific generation
             String companyName = faker.company().name();
             demoEntity.setLegalName(companyName);
@@ -30,7 +47,8 @@ public class DemoEntityGenerator {
             demoEntity.setTin(provider.itin());
             demoEntity.setEmail(faker.internet().emailAddress(companyName.replaceAll("\\s+", "").toLowerCase()));
         } else {
-            // Individual-specific generation
+            // Individual-specific generation (default)
+            demoEntity.setEntityType("I"); // Ensure type is set to 'I' if not 'B'
             String firstName = faker.name().firstName();
             String lastName = faker.name().lastName();
             demoEntity.setFirstName(firstName);
@@ -41,13 +59,14 @@ public class DemoEntityGenerator {
             demoEntity.setTin(faker.idNumber().ssnValid());
             demoEntity.setEmail(faker.internet().emailAddress());
         }
+
+        // Common fields for both types
         demoEntity.setStreetAddress(faker.address().streetAddress());
         demoEntity.setCity(faker.address().city());
         demoEntity.setState(faker.address().stateAbbr());
         demoEntity.setZipCode(faker.address().zipCode());
         demoEntity.setCountry("United States");
         demoEntity.setCreateTs(faker.date().past(365, TimeUnit.DAYS).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
-
 
         return demoEntity;
     }
