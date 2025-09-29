@@ -1,40 +1,65 @@
-//DB2FULL  JOB (ACCT),'DB2 FULL COPY',CLASS=A,MSGCLASS=X,NOTIFY=&SYSUID
-//* ====== Common variable definitions ======
-/* SET HLQ=MYDB                /* dataset HLQ                         */
-/* SET SUBSYS=DSN1             /* Db2 subsystem ID                    */
-/* SET DBNAME=LAB01            /* database name                       */
-/* SET TSNAME=TSLAB01          /* tablespace name                     */
-/* SET UNIT=SYSDA              /* storage unit                        */
-/* SET PRI=10,SEC=1            /* space allocation (cyl)              */
-/* SET UID=BKUP                /* utility job UID                     */
-/* SET TAG=Y20250929.T120000   /* timestamp tag                       */
-/* SET PARALLEL=2              /* parallelism                         */
-/* SET COPY1=SYSCOPY           /* primary copy DD name                */
-/* SET COPY2=SYSCOPY2          /* secondary copy DD name              */
-/* SET RCOPY1=COPYR1           /* remote primary copy DD name         */
-/* SET RCOPY2=COPYR2           /* remote secondary copy DD name       */
+//DB2MLCP JOB (ACCT),'DB2 FULL COPY LISTDEF',CLASS=A,MSGCLASS=X,NOTIFY=&SYSUID
+//*
+//* ====================================================================
+//*  This job first quiesces a DB2 database to establish a point
+//*  of consistency, and then uses a LISTDEF to perform a full
+//*  image copy backup (SHRLEVEL CHANGE) of all tablespaces and
+//*  indexspaces within that database.
+//* ====================================================================
+//*
+//* ====== Common Symbolic Parameter Definitions ======
+//         SET HLQ='MYDB'                  /* High-Level Qualifier for datasets   */
+//         SET SUBSYS='DSN1'               /* DB2 subsystem ID                    */
+//         SET DBNAME='LAB01'              /* Database name                       */
+//         SET UNIT='SYSDA'                /* Storage unit (e.g., SYSDA or TAPE)  */
+//         SET PRI=50,SEC=10               /* Space allocation (in cylinders)     */
+//         SET UID='BKUP'                  /* Generic Unique ID for the utility   */
+//         SET TAG='Y20250929.T120000'     /* Timestamp tag for the backup        */
+//         SET PARALLEL=2                  /* Degree of parallelism for the copy  */
+//         SET COPY1='SYSCOPY'             /* DD name for the primary copy        */
+//*
 //*------------------------------------------------------------------*
-//* Step: Full copy of tablespace &DBNAME..&TSNAME
+//* Step 1: QUIESCE - Create a point-of-consistency for DB &DBNAME
 //*------------------------------------------------------------------*
-//FULLTS  EXEC DSNUPROC,SYSTEM=&SUBSYS,UID='&UID'
-//&COPY1  DD DSN=&HLQ..COPY.&TSNAME..FULL.&TAG,
-//          DISP=(NEW,CATLG,DELETE),UNIT=&UNIT,
-//          SPACE=(CYL,(&PRI,&SEC))
-//&COPY2  DD DSN=&HLQ..COPY.&TSNAME..FULL.&TAG..BKP,
-//          DISP=(NEW,CATLG,DELETE),UNIT=&UNIT,
-//          SPACE=(CYL,(&PRI,&SEC))
-//&RCOPY1 DD DSN=&HLQ..RCOPY.&TSNAME..FULL.&TAG,
-//          DISP=(NEW,CATLG,DELETE),UNIT=&UNIT,
-//          SPACE=(CYL,(&PRI,&SEC))
-//&RCOPY2 DD DSN=&HLQ..RCOPY.&TSNAME..FULL.&TAG..BKP,
-//          DISP=(NEW,CATLG,DELETE),UNIT=&UNIT,
-//          SPACE=(CYL,(&PRI,&SEC))
+//QUIESCE  EXEC PGM=DSNUTILB,PARM='&SUBSYS,&UID..QUIESCE'
 //SYSPRINT DD SYSOUT=*
 //SYSIN    DD *
-  COPY TABLESPACE &DBNAME..&TSNAME
-       FULL YES                 /* full image copy */
-       SHRLEVEL CHANGE           /* allow read/write during copy */
-       PARALLEL &PARALLEL
-       COPYDDN(&COPY1,&COPY2)
-       RECOVERYDDN(&RCOPY1,&RCOPY2)
+  QUIESCE DATABASE &DBNAME WRITE(YES)
 /*
+//*
+//*------------------------------------------------------------------*
+//* Step 2: COPYLIST - Back up all objects defined in the LISTDEF
+//* This step only runs if the QUIESCE step is successful (RC=0).
+//*------------------------------------------------------------------*
+//COPYLIST EXEC PGM=DSNUTILB,PARM='&SUBSYS,&UID..COPYFULL',
+//         COND=(0,NE,QUIESCE)
+//SYSUT1   DD UNIT=&UNIT,SPACE=(CYL,(10,10))
+//SYSPRINT DD SYSOUT=*
+//SYSUDUMP DD SYSOUT=*
+//SYSIN    DD *
+  /*----------------------------------------------------------------*/
+  /* Define a list named L_DB_BACKUP to include all tablespaces   */
+  /* and indexspaces in the specified database.                   */
+  /*----------------------------------------------------------------*/
+  LISTDEF L_DB_BACKUP
+    INCLUDE TABLESPACE DATABASE &DBNAME
+    INCLUDE INDEXSPACE DATABASE &DBNAME
+
+  /*----------------------------------------------------------------*/
+  /* Perform a full image copy on all objects in L_DB_BACKUP.     */
+  /*----------------------------------------------------------------*/
+  COPY LIST L_DB_BACKUP
+       COPYDDN(&COPY1)
+       FULL(YES)
+       SHRLEVEL(CHANGE)
+       PARALLEL(&PARALLEL)
+/*
+//*------------------------------------------------------------------*
+//* Define the backup output dataset
+//*------------------------------------------------------------------*
+//&COPY1   DD DSN=&HLQ..COPY.&DBNAME..FULL.&TAG,
+//            DISP=(NEW,CATLG,DELETE),
+//            UNIT=&UNIT,
+//            SPACE=(CYL,(&PRI,&SEC)),
+//            DCB=(RECFM=VB,LRECL=32760,BLKSIZE=32760)
+//
