@@ -1,31 +1,33 @@
 //DBX53PE JOB 99394RIB,'TS0XXX USER NAME',CLASS=A,MSGCLASS=X,
-//             MSGLEVEL=(1,1),REGION=100M,NOTIFY=&SYSUID
-//STEP1   EXEC PGM=FPECMAIN,PARM='DATEFORMAT=YYYY-MM-DD'
+//             MSGLEVEL=(1,1),REGION=0M,NOTIFY=&SYSUID
+//* -----------------------------------------------------
+//* Statistics & Accounting LONG reports to 2 datasets
+//* -----------------------------------------------------
+//STEP1   EXEC PGM=FPECMAIN,PARM='DATEFORMAT=MM/DD/YY'
 //STEPLIB DD  DISP=SHR,DSN=SYS3.OMEGAMON.PSP.DITE.TKANMOD
 //INPUTDD DD  DISP=SHR,DSN=SYS1.SMF.DAYTAPE(-1)
 //SYSIN   DD  *
   GLOBAL
-     FROM(2025-11-04,08:00:00) TO(2025-11-04,09:00:00)  
+     FROM(11/04/25-08.00.00) TO(11/04/25-09.00.00)
      INCLUDE(SSID(DB2A))
-
-  /* ---- 统计长报表 ---- */
   STATISTICS
      REPORT
         LAYOUT(LONG)
-        DDNAME(STRPTDD)           /* 默认统计报表 ddname，可改为你喜欢的8字符 */
-
-  /* ---- Accounting 长报表 ---- */
+        DDNAME(STATDD)
   ACCOUNTING
-     REDUCE INTERVAL(60)          /* Accounting 报表通常配一个聚合间隔 */
      REPORT
         LAYOUT(LONG)
-        DDNAME(ACRPTDD)           /* 默认 accounting 报表 ddname */
-
-  EXEC                          /* 没有这行只做语法检查，不生成报表 */
-/*
-//* 与上面 DDNAME 对应的 DD（也可保留让系统动态分配到 SYSOUT）
-//STRPTDD  DD SYSOUT=*
-//ACRPTDD  DD SYSOUT=*
-//DPMLOG   DD SYSOUT=*
-//SYSPRINT DD SYSOUT=*
-//SYSUDUMP DD SYSOUT=*
+        DDNAME(ACCNTDD)
+  EXEC
+//*
+//STATDD   DD DISP=(NEW,CATLG,DELETE),
+//            DSN=YOURHLQ.OMEGAMON.D25.STATRPT,
+//            SPACE=(CYL,(5,5)),UNIT=SYSDA,
+//            DCB=(RECFM=VB,LRECL=8192,BLKSIZE=0)
+//ACCNTDD  DD DISP=(NEW,CATLG,DELETE),
+//            DSN=YOURHLQ.OMEGAMON.D25.ACCNTRPT,
+//            SPACE=(CYL,(5,5)),UNIT=SYSDA,
+//            DCB=(RECFM=VB,LRECL=8192,BLKSIZE=0)
+//DPMLOG   DD SYSOUT=X
+//SYSPRINT DD SYSOUT=X
+//SYSUDUMP DD SYSOUT=X
