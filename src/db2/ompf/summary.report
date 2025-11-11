@@ -1,0 +1,56 @@
+//DB2SQLR JOB (ACCT),'SQL ACTIVITY EXPORT',CLASS=A,MSGCLASS=X,NOTIFY=&SYSUID
+//* --------------------------------------------------------------------
+//* PURPOSE : GENERATE DAILY SQL ACTIVITY REPORT (BASED ON SUM_GENERAL)
+//* DB2:     xxxxx.SUM_GENERAL
+//* OUTPUT:  SYSOUT / FLAT FILE REPORT
+//* AUTHOR:  [Your Name]
+//* --------------------------------------------------------------------
+//RUNSQL  EXEC PGM=IKJEFT01,DYNAMNBR=20,REGION=0M
+//SYSTSPRT DD  SYSOUT=*
+//SYSPRINT DD  SYSOUT=*
+//SYSTSIN  DD  *
+DSN SYSTEM(DB2P)
+RUN PROGRAM(DSNTEP2) PLAN(DSNTEP71) -
+    LIB('DSN810.RUNLIB.LOAD') PARMS('SQL')
+END
+/*
+//SYSIN    DD  *
+----------------------------------------------------------------------
+-- SQL ACTIVITY REPORT (DAILY) - FROM xxxxx.SUM_GENERAL
+----------------------------------------------------------------------
+SELECT
+    'DB2P'                                AS DB2_SUBSYS,
+    DATE(CLASS1_TIME_END)                 AS END_DATE,
+    RIGHT('00' || HOUR(CLASS1_TIME_END),2) AS HOUR,
+    COUNT(*)                              AS THREAD_REQ,
+    DEC(SUM(COMMIT),19,0)                 AS COMMITS,
+    DEC(SUM(GRANT) + SUM(REVOKE) + SUM(LOCK_REQ),19,0) AS DDL,
+    DEC(SUM(SELECT) + SUM(INSERT) + SUM(UPDATE) + SUM(DELETE),19,0) AS DML,
+    DEC(SUM(OPEN),19,0)                   AS OPEN_CURS,
+    DEC(SUM(CLOSE),19,0)                  AS CLOSE_CURS,
+    DEC(SUM(FETCH),19,0)                  AS FETCHS,
+    DEC(SUM(PREPARE) + SUM(DESCRIBE),19,0) AS PREP_DESC,
+    DEC(SUM(GRANT) + SUM(REVOKE) + SUM(LOCK_REQ),19,0) AS DCL
+FROM xxxxx.SUM_GENERAL
+WHERE CLASS1_TIME_END >= CURRENT DATE - 1 DAY
+GROUP BY DATE(CLASS1_TIME_END), HOUR(CLASS1_TIME_END)
+ORDER BY DATE(CLASS1_TIME_END), HOUR(CLASS1_TIME_END)
+WITH UR;
+----------------------------------------------------------------------
+/*
+//SYSPUNCH DD  DUMMY
+//SYSUDUMP DD  SYSOUT=*
+//SYSOUT   DD  SYSOUT=*
+//REPORT   DD  DSN=YOURHLQ.DB2.SQLACT.RPT(+1),DISP=(NEW,CATLG,DELETE),
+//             SPACE=(CYL,(5,1),RLSE),
+//             DCB=(RECFM=FB,LRECL=132,BLKSIZE=0)
+//*
+//* To write report to the dataset, uncomment below and route DSNTEP2 output:
+//*  //SYSTERM DD SYSOUT=*
+//*  //SYSPRINT DD DSN=YOURHLQ.DB2.SQLACT.RPT(+1),DISP=(NEW,CATLG,DELETE),
+//*  //             SPACE=(CYL,(5,1),RLSE),
+//*  //             DCB=(RECFM=FB,LRECL=132,BLKSIZE=0)
+//*
+//*--------------------------------------------------------------------
+//*  END OF JOB
+//*--------------------------------------------------------------------
