@@ -1,0 +1,78 @@
+let
+    // 1. SharePoint site root URL
+    SiteUrl = "https://yourcompany.sharepoint.com/sites/yoursite",
+
+    // 2. Excel file name
+    FileName = "sales.xlsx",
+
+    // 3. Read file list from SharePoint
+    Source = SharePoint.Files(SiteUrl, [ApiVersion = 15]),
+
+    // 4. Keep only the target file
+    FilteredFile = Table.SelectRows(Source, each [Name] = FileName),
+
+    // 5. Get file content as binary
+    FileBinary = FilteredFile{0}[Content],
+
+    // 6. Read the Excel workbook, sheet name is "year"
+    Workbook = Excel.Workbook(FileBinary, null, true),
+    RawSheet = Workbook{[Item="year", Kind="Sheet"]}[Data],
+
+    // 7. Read the first two header rows
+    FirstRow = RawSheet{0},
+    SecondRow = RawSheet{1},
+
+    OriginalColumnNames = Table.ColumnNames(RawSheet),
+
+    // 8. Combine the two header rows into unique column names
+    NewColumnNames =
+        List.Transform(
+            List.Positions(OriginalColumnNames),
+            (i) =>
+                let
+                    YearValue = try Record.Field(FirstRow, OriginalColumnNames{i}) otherwise null,
+                    MetricValue = try Record.Field(SecondRow, OriginalColumnNames{i}) otherwise null,
+                    YearText = if YearValue = null then "" else Text.Trim(Text.From(YearValue)),
+                    MetricText = if MetricValue = null then "" else Text.Trim(Text.From(MetricValue))
+                in
+                    if i = 0 then
+                        "Month"
+                    else
+                        MetricText & "_" & YearText
+        ),
+
+    // 9. Skip the first two header rows and keep only data rows
+    DataRows = Table.Skip(RawSheet, 2),
+
+    // 10. Rename columns using the combined header names
+    RenamedTable = Table.RenameColumns(DataRows, List.Zip({OriginalColumnNames, NewColumnNames})),
+
+    // 11. Remove fully blank rows
+    RemovedBlankRows = Table.SelectRows(RenamedTable, each List.NonNullCount(Record.FieldValues(_)) > 0),
+
+    // 12. Unpivot all metric columns into attribute-value pairs
+    Unpivoted = Table.UnpivotOtherColumns(RemovedBlankRows, {"Month"}, "Attribute", "Value"),
+
+    // 13. Split the combined attribute into Metric and Year
+    SplitAttribute = Table.SplitColumn(
+        Unpivoted,
+        "Attribute",
+        Splitter.SplitTextByDelimiter("_", QuoteStyle.Csv),
+        {"Metric", "Year"}
+    ),
+
+    // 14. Set data types for the final columns
+    ChangedType = Table.TransformColumnTypes(
+        SplitAttribute,
+        {
+            {"Month", type text},
+            {"Metric", type text},
+            {"Year", Int64.Type},
+            {"Value", type number}
+        }
+    ),
+
+    // 15. Reorder columns for the final output
+    ReorderedColumns = Table.ReorderColumns(ChangedType, {"Month", "Year", "Metric", "Value"})
+in
+    ReorderedColumns
