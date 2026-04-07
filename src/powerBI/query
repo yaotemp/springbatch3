@@ -21,18 +21,42 @@ let
     // 7. Read the first two header rows
     FirstRow = RawSheet{0},
     SecondRow = RawSheet{1},
-
     OriginalColumnNames = Table.ColumnNames(RawSheet),
 
-    // 8. Combine the two header rows into unique column names
+    // 8. Read the first header row values
+    FirstRowValues =
+        List.Transform(
+            OriginalColumnNames,
+            each try Record.Field(FirstRow, _) otherwise null
+        ),
+
+    // 9. Fill empty year cells from left to right
+    FilledYearValues =
+        List.Accumulate(
+            FirstRowValues,
+            {},
+            (state, current) =>
+                let
+                    CurrentText = if current = null then "" else Text.Trim(Text.From(current)),
+                    FilledValue =
+                        if CurrentText <> "" then
+                            CurrentText
+                        else if List.Count(state) = 0 then
+                            ""
+                        else
+                            List.Last(state)
+                in
+                    state & {FilledValue}
+        ),
+
+    // 10. Combine the two header rows into unique column names
     NewColumnNames =
         List.Transform(
             List.Positions(OriginalColumnNames),
             (i) =>
                 let
-                    YearValue = try Record.Field(FirstRow, OriginalColumnNames{i}) otherwise null,
+                    YearText = FilledYearValues{i},
                     MetricValue = try Record.Field(SecondRow, OriginalColumnNames{i}) otherwise null,
-                    YearText = if YearValue = null then "" else Text.Trim(Text.From(YearValue)),
                     MetricText = if MetricValue = null then "" else Text.Trim(Text.From(MetricValue))
                 in
                     if i = 0 then
@@ -41,19 +65,19 @@ let
                         MetricText & "_" & YearText
         ),
 
-    // 9. Skip the first two header rows and keep only data rows
+    // 11. Skip the first two header rows and keep only data rows
     DataRows = Table.Skip(RawSheet, 2),
 
-    // 10. Rename columns using the combined header names
-    RenamedTable = Table.RenameColumns(DataRows, List.Zip({OriginalColumnNames, NewColumnNames})),
+    // 12. Rebuild the table with the new column names
+    RenamedTable = Table.FromColumns(Table.ToColumns(DataRows), NewColumnNames),
 
-    // 11. Remove fully blank rows
+    // 13. Remove fully blank rows
     RemovedBlankRows = Table.SelectRows(RenamedTable, each List.NonNullCount(Record.FieldValues(_)) > 0),
 
-    // 12. Unpivot all metric columns into attribute-value pairs
+    // 14. Unpivot all metric columns into attribute-value pairs
     Unpivoted = Table.UnpivotOtherColumns(RemovedBlankRows, {"Month"}, "Attribute", "Value"),
 
-    // 13. Split the combined attribute into Metric and Year
+    // 15. Split the combined attribute into Metric and Year
     SplitAttribute = Table.SplitColumn(
         Unpivoted,
         "Attribute",
@@ -61,7 +85,7 @@ let
         {"Metric", "Year"}
     ),
 
-    // 14. Set data types for the final columns
+    // 16. Set data types for the final columns
     ChangedType = Table.TransformColumnTypes(
         SplitAttribute,
         {
@@ -72,7 +96,7 @@ let
         }
     ),
 
-    // 15. Reorder columns for the final output
+    // 17. Reorder columns for the final output
     ReorderedColumns = Table.ReorderColumns(ChangedType, {"Month", "Year", "Metric", "Value"})
 in
     ReorderedColumns
