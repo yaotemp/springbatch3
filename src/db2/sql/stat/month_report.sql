@@ -24,6 +24,42 @@ WITH summary_2025 AS (
         PLAN_NAME,
         PRIMAUTH,
         MAINPACK
+),
+summary_with_prev_month AS (
+    SELECT
+        curr.YEAR,
+        curr."MONTH",
+        curr.CONNECT_TYPE,
+        curr.CONNECT_ID,
+        curr.CORRNAME,
+        curr.PLAN_NAME,
+        curr.PRIMAUTH,
+        curr.MAINPACK,
+        curr.sum_count,
+        curr.sum_class1_elapsed,
+        curr.sum_class1_cpu_total,
+        MAX(prev_month."MONTH") AS prev_month
+    FROM summary_2025 curr
+    LEFT JOIN summary_2025 prev_month
+        ON curr.CONNECT_TYPE = prev_month.CONNECT_TYPE
+       AND curr.CONNECT_ID = prev_month.CONNECT_ID
+       AND curr.CORRNAME = prev_month.CORRNAME
+       AND curr.PLAN_NAME = prev_month.PLAN_NAME
+       AND curr.PRIMAUTH = prev_month.PRIMAUTH
+       AND curr.MAINPACK = prev_month.MAINPACK
+       AND prev_month."MONTH" < curr."MONTH"
+    GROUP BY
+        curr.YEAR,
+        curr."MONTH",
+        curr.CONNECT_TYPE,
+        curr.CONNECT_ID,
+        curr.CORRNAME,
+        curr.PLAN_NAME,
+        curr.PRIMAUTH,
+        curr.MAINPACK,
+        curr.sum_count,
+        curr.sum_class1_elapsed,
+        curr.sum_class1_cpu_total
 )
 SELECT
     curr.YEAR,
@@ -74,7 +110,7 @@ SELECT
         )
     END AS cpu_change_pct
 
-FROM summary_2025 curr
+FROM summary_with_prev_month curr
 LEFT JOIN summary_2025 prev
     ON curr.CONNECT_TYPE = prev.CONNECT_TYPE
    AND curr.CONNECT_ID = prev.CONNECT_ID
@@ -82,17 +118,8 @@ LEFT JOIN summary_2025 prev
    AND curr.PLAN_NAME = prev.PLAN_NAME
    AND curr.PRIMAUTH = prev.PRIMAUTH
    AND curr.MAINPACK = prev.MAINPACK
-   AND prev."MONTH" = (
-        SELECT MAX(x."MONTH")
-        FROM summary_2025 x
-        WHERE x.CONNECT_TYPE = curr.CONNECT_TYPE
-          AND x.CONNECT_ID = curr.CONNECT_ID
-          AND x.CORRNAME = curr.CORRNAME
-          AND x.PLAN_NAME = curr.PLAN_NAME
-          AND x.PRIMAUTH = curr.PRIMAUTH
-          AND x.MAINPACK = curr.MAINPACK
-          AND x."MONTH" < curr."MONTH"
-   )
+   AND curr.prev_month = prev."MONTH"
+
 ORDER BY
     curr.CONNECT_TYPE,
     curr.CONNECT_ID,
