@@ -30,7 +30,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "JAVA_HOME=${JAVA_HOME:-}"
+          echo "RUNNER_OS=${RUNNER_OS:-}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-}"
+          echo "RUNNER_NAME=${RUNNER_NAME:-}"
+          echo "HOME=${HOME:-not set}"
+          echo "RUNNER_TEMP=${RUNNER_TEMP:-not set}"
+          echo "JAVA_HOME=${JAVA_HOME:-not set}"
+
           java -version
           mvn -version
 
@@ -44,7 +50,6 @@ jobs:
 
           if [ "$JAVA_MAJOR" -lt 17 ]; then
             echo "ERROR: Java 17+ is required by the SonarQube scanner, but found Java $JAVA_VERSION"
-            echo "Ask the infra team to install Java 17 on the self-hosted runner or set JAVA_HOME to Java 17."
             exit 1
           fi
 
@@ -59,7 +64,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p "$HOME/.m2"
+          MAVEN_HOME_DIR="${HOME:-$RUNNER_TEMP}"
+          MAVEN_SETTINGS_DIR="$MAVEN_HOME_DIR/.m2"
+          MAVEN_SETTINGS_FILE="$MAVEN_SETTINGS_DIR/settings.xml"
+
+          mkdir -p "$MAVEN_SETTINGS_DIR"
 
           xml_escape() {
             printf '%s' "$1" \
@@ -74,7 +83,7 @@ jobs:
           NEXUS_PASSWORD_ESCAPED=$(xml_escape "$NEXUS_PASSWORD")
           NEXUS_URL_ESCAPED=$(xml_escape "$NEXUS_URL")
 
-          cat > "$HOME/.m2/settings.xml" <<EOF
+          cat > "$MAVEN_SETTINGS_FILE" <<EOF
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                     xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
@@ -97,6 +106,7 @@ jobs:
             <profiles>
               <profile>
                 <id>nexus-profile</id>
+
                 <repositories>
                   <repository>
                     <id>nexus</id>
@@ -109,6 +119,7 @@ jobs:
                     </snapshots>
                   </repository>
                 </repositories>
+
                 <pluginRepositories>
                   <pluginRepository>
                     <id>nexus</id>
@@ -130,7 +141,8 @@ jobs:
           </settings>
           EOF
 
-          echo "Maven settings.xml created at $HOME/.m2/settings.xml"
+          echo "Maven settings.xml created at $MAVEN_SETTINGS_FILE"
+          echo "MAVEN_SETTINGS_FILE=$MAVEN_SETTINGS_FILE" >> "$GITHUB_ENV"
 
       - name: Build and analyze
         shell: bash
@@ -142,7 +154,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mvn -B verify \
+          mvn -B -s "$MAVEN_SETTINGS_FILE" verify \
             org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey="$PROJECT_KEY" \
             -Dsonar.projectName="$PROJECT_NAME" \
