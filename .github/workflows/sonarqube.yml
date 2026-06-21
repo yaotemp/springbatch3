@@ -19,11 +19,20 @@ jobs:
     name: Build and SonarQube Scan
     runs-on: [self-hosted, linux]
 
+    env:
+      MAVEN_SETTINGS_FILE: ${{ runner.temp }}/maven/.m2/settings.xml
+      MAVEN_LOCAL_REPO: ${{ runner.temp }}/maven/.m2/repository
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup Java
+        uses: AD/xp-ghac.github/actions/setup-java@main
+        with:
+          java-version: 17
 
       - name: Verify Java and Maven
         shell: bash
@@ -33,9 +42,9 @@ jobs:
           echo "RUNNER_OS=${RUNNER_OS:-}"
           echo "RUNNER_ARCH=${RUNNER_ARCH:-}"
           echo "RUNNER_NAME=${RUNNER_NAME:-}"
-          echo "HOME=${HOME:-not set}"
-          echo "RUNNER_TEMP=${RUNNER_TEMP:-not set}"
           echo "JAVA_HOME=${JAVA_HOME:-not set}"
+          echo "MAVEN_SETTINGS_FILE=$MAVEN_SETTINGS_FILE"
+          echo "MAVEN_LOCAL_REPO=$MAVEN_LOCAL_REPO"
 
           java -version
           mvn -version
@@ -48,12 +57,31 @@ jobs:
             exit 1
           fi
 
-          if [ "$JAVA_MAJOR" -lt 17 ]; then
-            echo "ERROR: Java 17+ is required by the SonarQube scanner, but found Java $JAVA_VERSION"
+          if [ "$JAVA_MAJOR" -ne 17 ]; then
+            echo "ERROR: Java 17 is required, but found Java $JAVA_VERSION"
             exit 1
           fi
 
           echo "Java $JAVA_VERSION detected. OK."
+
+      - name: Prepare Maven directories
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$(dirname "$MAVEN_SETTINGS_FILE")"
+          mkdir -p "$MAVEN_LOCAL_REPO"
+
+          echo "Prepared Maven settings file path: $MAVEN_SETTINGS_FILE"
+          echo "Prepared Maven local repository: $MAVEN_LOCAL_REPO"
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MAVEN_LOCAL_REPO }}
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml', 'lib/*.jar') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-
 
       - name: Write Maven settings.xml
         shell: bash
@@ -79,12 +107,7 @@ jobs:
             exit 1
           fi
 
-          MAVEN_BASE_DIR="${RUNNER_TEMP:-/tmp}/maven"
-          MAVEN_SETTINGS_DIR="$MAVEN_BASE_DIR/.m2"
-          MAVEN_SETTINGS_FILE="$MAVEN_SETTINGS_DIR/settings.xml"
-          MAVEN_LOCAL_REPO="$MAVEN_SETTINGS_DIR/repository"
-
-          mkdir -p "$MAVEN_SETTINGS_DIR"
+          mkdir -p "$(dirname "$MAVEN_SETTINGS_FILE")"
           mkdir -p "$MAVEN_LOCAL_REPO"
 
           xml_escape() {
@@ -123,7 +146,6 @@ jobs:
             <profiles>
               <profile>
                 <id>nexus-profile</id>
-
                 <repositories>
                   <repository>
                     <id>nexus</id>
@@ -136,7 +158,6 @@ jobs:
                     </snapshots>
                   </repository>
                 </repositories>
-
                 <pluginRepositories>
                   <pluginRepository>
                     <id>nexus</id>
@@ -161,9 +182,6 @@ jobs:
           echo "Maven settings.xml created at $MAVEN_SETTINGS_FILE"
           echo "Maven local repository set to $MAVEN_LOCAL_REPO"
 
-          echo "MAVEN_SETTINGS_FILE=$MAVEN_SETTINGS_FILE" >> "$GITHUB_ENV"
-          echo "MAVEN_LOCAL_REPO=$MAVEN_LOCAL_REPO" >> "$GITHUB_ENV"
-
       - name: Install DB2 JDBC dependencies into local Maven repository
         shell: bash
         run: |
@@ -171,16 +189,6 @@ jobs:
 
           DB2_JCC_JAR="lib/db2jcc4-4.0.jar"
           DB2_LICENSE_JAR="lib/db2jcc-license-cisuz-4.0.jar"
-
-          if [ -z "${MAVEN_SETTINGS_FILE:-}" ]; then
-            echo "ERROR: MAVEN_SETTINGS_FILE is not set."
-            exit 1
-          fi
-
-          if [ -z "${MAVEN_LOCAL_REPO:-}" ]; then
-            echo "ERROR: MAVEN_LOCAL_REPO is not set."
-            exit 1
-          fi
 
           if [ ! -f "$MAVEN_SETTINGS_FILE" ]; then
             echo "ERROR: Maven settings file not found: $MAVEN_SETTINGS_FILE"
@@ -222,11 +230,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${MAVEN_LOCAL_REPO:-}" ]; then
-            echo "ERROR: MAVEN_LOCAL_REPO is not set."
-            exit 1
-          fi
-
           echo "Checking local Maven repository: $MAVEN_LOCAL_REPO"
 
           if [ ! -f "$MAVEN_LOCAL_REPO/com/ibm/db2/db2jcc4/4.0/db2jcc4-4.0.jar" ]; then
@@ -263,23 +266,13 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${MAVEN_SETTINGS_FILE:-}" ]; then
-            echo "ERROR: MAVEN_SETTINGS_FILE is not set."
-            exit 1
-          fi
-
-          if [ -z "${MAVEN_LOCAL_REPO:-}" ]; then
-            echo "ERROR: MAVEN_LOCAL_REPO is not set."
-            exit 1
-          fi
-
           if [ ! -f "$MAVEN_SETTINGS_FILE" ]; then
             echo "ERROR: Maven settings file not found: $MAVEN_SETTINGS_FILE"
             exit 1
           fi
 
           mvn -B -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" verify \
-            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
             -Dsonar.projectKey="$PROJECT_KEY" \
             -Dsonar.projectName="$PROJECT_NAME" \
             -Dsonar.host.url="$SONAR_HOST_URL" \
