@@ -149,18 +149,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          DB2_JCC_JAR="lib/jcc-4.0.jar"
-          DB2_LICENSE_JAR="lib/db2jcc-license-ciusz-4.0.jar"
+          DB2_JCC_JAR="lib/db2jcc4-4.0.jar"
+          DB2_LICENSE_JAR="lib/db2jcc-license-db2j-4.0.jar"
 
           if [ ! -f "$DB2_JCC_JAR" ]; then
             echo "ERROR: $DB2_JCC_JAR not found."
-            echo "Please commit the DB2 JDBC driver jar to: lib/jcc-4.0.jar"
+            echo "Current lib folder:"
+            ls -la lib || true
             exit 1
           fi
 
           if [ ! -f "$DB2_LICENSE_JAR" ]; then
             echo "ERROR: $DB2_LICENSE_JAR not found."
-            echo "Please commit the DB2 JDBC license jar to: lib/db2jcc-license-ciusz-4.0.jar"
+            echo "Current lib folder:"
+            ls -la lib || true
             exit 1
           fi
 
@@ -178,8 +180,8 @@ jobs:
             -Dpackaging=jar \
             -Dfile="$DB2_LICENSE_JAR"
 
-          echo "Installed com.ibm.db2:jcc:4.0 into local Maven repository."
-          echo "Installed com.ibm.db2:db2jcc-license-ciusz:4.0 into local Maven repository."
+          echo "Installed com.ibm.db2:jcc:4.0 from $DB2_JCC_JAR"
+          echo "Installed com.ibm.db2:db2jcc-license-ciusz:4.0 from $DB2_LICENSE_JAR"
 
       - name: Build and analyze
         shell: bash
