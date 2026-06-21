@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Java
-        uses: .github/actions/setup-java@main
+        uses: AD/dxp-ghac/.github/actions/setup-java@main
         with:
           java-version: 17
 
@@ -78,9 +78,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .m2/repository
-          key: m2-${{ hashFiles('**/pom.xml', 'lib/*.jar') }}
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml', 'lib/*.jar') }}
           restore-keys: |
-            m2-
+            ${{ runner.os }}-m2-
 
       - name: Write Maven settings.xml
         shell: bash
@@ -245,13 +245,77 @@ jobs:
 
           echo "DB2 dependencies are installed in local Maven repository."
 
-      - name: Build and analyze
+      - name: Setup Oras
+        uses: AD/dxp-ghac/.github/actions/setup-oras@main
+        with:
+          registry-username: ${{ secrets.NEXUS_ECP_DXP_USER }}
+          registry-password: ${{ secrets.NEXUS_ECP_DXP_PASS }}
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: |
+            ${{ runner.os }}-sonar
+
+      - name: Install SonarScanner CLI
+        uses: AD/dxp-ghac/.github/actions/setup-sonar-scanner-cli@main
+        with:
+          registry-username: ${{ secrets.NEXUS_ECP_DXP_USER }}
+          registry-password: ${{ secrets.NEXUS_ECP_DXP_PASS }}
+          java-version: 17
+
+      - name: Build application
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mvn -B -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" verify
+
+      - name: Ensure sonar-project.properties
+        shell: bash
+        env:
+          PROJECT_KEY: ${{ github.event.repository.name }}
+          PROJECT_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f sonar-project.properties ]; then
+            cat > sonar-project.properties <<EOF_SONAR
+          sonar.projectKey=${PROJECT_KEY}
+          sonar.projectName=${PROJECT_NAME}
+          sonar.sources=src
+          sonar.java.binaries=target/classes
+          sonar.sourceEncoding=UTF-8
+          sonar.java.source=8
+          EOF_SONAR
+          fi
+
+          if ! grep -q '^sonar.projectKey=' sonar-project.properties; then
+            echo "sonar.projectKey=${PROJECT_KEY}" >> sonar-project.properties
+          fi
+
+          if ! grep -q '^sonar.projectName=' sonar-project.properties; then
+            echo "sonar.projectName=${PROJECT_NAME}" >> sonar-project.properties
+          fi
+
+          if ! grep -q '^sonar.java.binaries=' sonar-project.properties; then
+            echo "sonar.java.binaries=target/classes" >> sonar-project.properties
+          fi
+
+          if ! grep -q '^sonar.sourceEncoding=' sonar-project.properties; then
+            echo "sonar.sourceEncoding=UTF-8" >> sonar-project.properties
+          fi
+
+          echo "Final sonar-project.properties:"
+          cat sonar-project.properties
+
+      - name: SonarQube scan
         shell: bash
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          PROJECT_KEY: ${{ github.event.repository.name }}
-          PROJECT_NAME: ${{ github.event.repository.name }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
         run: |
           set -euo pipefail
 
@@ -261,20 +325,12 @@ jobs:
           fi
 
           if [ -z "${SONAR_HOST_URL:-}" ]; then
-            echo "ERROR: SONAR_HOST_URL secret is missing."
+            echo "ERROR: SONAR_HOST_URL variable is missing."
             exit 1
           fi
 
-          if [ ! -f "$MAVEN_SETTINGS_FILE" ]; then
-            echo "ERROR: Maven settings file not found: $MAVEN_SETTINGS_FILE"
-            exit 1
-          fi
+          echo "Using SONAR_HOST_URL=$SONAR_HOST_URL"
 
-          mvn -B -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" verify \
-            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.projectKey="$PROJECT_KEY" \
-            -Dsonar.projectName="$PROJECT_NAME" \
+          sonar-scanner \
             -Dsonar.host.url="$SONAR_HOST_URL" \
-            -Dsonar.token="$SONAR_TOKEN" \
-            -Dsonar.java.source=8 \
-            -Dsonar.scm.provider=git
+            -Dsonar.token="$SONAR_TOKEN"
