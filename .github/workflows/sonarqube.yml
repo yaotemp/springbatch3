@@ -100,7 +100,7 @@ jobs:
           NEXUS_PASSWORD_ESCAPED=$(xml_escape "$NEXUS_PASSWORD")
           NEXUS_URL_ESCAPED=$(xml_escape "$NEXUS_URL")
 
-          cat > "$MAVEN_SETTINGS_FILE" <<EOF
+          cat > "$MAVEN_SETTINGS_FILE" <<EOF_SETTINGS
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                     xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
@@ -156,7 +156,7 @@ jobs:
               <activeProfile>nexus-profile</activeProfile>
             </activeProfiles>
           </settings>
-          EOF
+          EOF_SETTINGS
 
           echo "Maven settings.xml created at $MAVEN_SETTINGS_FILE"
           echo "Maven local repository set to $MAVEN_LOCAL_REPO"
@@ -202,20 +202,20 @@ jobs:
 
           mvn -B -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" org.apache.maven.plugins:maven-install-plugin:2.4:install-file \
             -DgroupId=com.ibm.db2 \
-            -DartifactId=jcc \
+            -DartifactId=db2jcc4 \
             -Dversion=4.0 \
             -Dpackaging=jar \
             -Dfile="$DB2_JCC_JAR"
 
           mvn -B -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" org.apache.maven.plugins:maven-install-plugin:2.4:install-file \
             -DgroupId=com.ibm.db2 \
-            -DartifactId=db2jcc-license-ciusz \
+            -DartifactId=db2jcc-license-cisuz \
             -Dversion=4.0 \
             -Dpackaging=jar \
             -Dfile="$DB2_LICENSE_JAR"
 
-          echo "Installed com.ibm.db2:jcc:4.0 from $DB2_JCC_JAR"
-          echo "Installed com.ibm.db2:db2jcc-license-ciusz:4.0 from $DB2_LICENSE_JAR"
+          echo "Installed com.ibm.db2:db2jcc4:4.0 from $DB2_JCC_JAR"
+          echo "Installed com.ibm.db2:db2jcc-license-cisuz:4.0 from $DB2_LICENSE_JAR"
 
       - name: Verify DB2 dependencies installed locally
         shell: bash
@@ -229,14 +229,14 @@ jobs:
 
           echo "Checking local Maven repository: $MAVEN_LOCAL_REPO"
 
-          if [ ! -f "$MAVEN_LOCAL_REPO/com/ibm/db2/jcc/4.0/jcc-4.0.jar" ]; then
-            echo "ERROR: com.ibm.db2:jcc:4.0 was not installed locally."
+          if [ ! -f "$MAVEN_LOCAL_REPO/com/ibm/db2/db2jcc4/4.0/db2jcc4-4.0.jar" ]; then
+            echo "ERROR: com.ibm.db2:db2jcc4:4.0 was not installed locally."
             find "$MAVEN_LOCAL_REPO/com/ibm/db2" -type f 2>/dev/null || true
             exit 1
           fi
 
-          if [ ! -f "$MAVEN_LOCAL_REPO/com/ibm/db2/db2jcc-license-ciusz/4.0/db2jcc-license-ciusz-4.0.jar" ]; then
-            echo "ERROR: com.ibm.db2:db2jcc-license-ciusz:4.0 was not installed locally."
+          if [ ! -f "$MAVEN_LOCAL_REPO/com/ibm/db2/db2jcc-license-cisuz/4.0/db2jcc-license-cisuz-4.0.jar" ]; then
+            echo "ERROR: com.ibm.db2:db2jcc-license-cisuz:4.0 was not installed locally."
             find "$MAVEN_LOCAL_REPO/com/ibm/db2" -type f 2>/dev/null || true
             exit 1
           fi
@@ -278,7 +278,7 @@ jobs:
             exit 1
           fi
 
-          mvn -B -U -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" verify \
+          mvn -B -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" verify \
             org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey="$PROJECT_KEY" \
             -Dsonar.projectName="$PROJECT_NAME" \
