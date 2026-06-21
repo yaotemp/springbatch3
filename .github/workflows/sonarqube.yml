@@ -165,7 +165,7 @@ jobs:
           set -euo pipefail
 
           DB2_JCC_JAR="lib/db2jcc4-4.0.jar"
-          DB2_LICENSE_JAR="lib/db2jcc-license-db2j-4.0.jar"
+          DB2_LICENSE_JAR="lib/db2jcc-license-cisuz-4.0.jar"
 
           if [ -z "${MAVEN_SETTINGS_FILE:-}" ]; then
             echo "ERROR: MAVEN_SETTINGS_FILE is not set."
@@ -177,17 +177,16 @@ jobs:
             exit 1
           fi
 
+          echo "Current lib folder:"
+          ls -la lib
+
           if [ ! -f "$DB2_JCC_JAR" ]; then
             echo "ERROR: $DB2_JCC_JAR not found."
-            echo "Current lib folder:"
-            ls -la lib || true
             exit 1
           fi
 
           if [ ! -f "$DB2_LICENSE_JAR" ]; then
             echo "ERROR: $DB2_LICENSE_JAR not found."
-            echo "Current lib folder:"
-            ls -la lib || true
             exit 1
           fi
 
@@ -207,6 +206,29 @@ jobs:
 
           echo "Installed com.ibm.db2:jcc:4.0 from $DB2_JCC_JAR"
           echo "Installed com.ibm.db2:db2jcc-license-ciusz:4.0 from $DB2_LICENSE_JAR"
+
+      - name: Verify DB2 dependencies installed locally
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LOCAL_REPO="${HOME:-${RUNNER_TEMP:-/tmp}}/.m2/repository"
+
+          echo "Checking local Maven repository: $LOCAL_REPO"
+
+          if [ ! -f "$LOCAL_REPO/com/ibm/db2/jcc/4.0/jcc-4.0.jar" ]; then
+            echo "ERROR: com.ibm.db2:jcc:4.0 was not installed locally."
+            find "$LOCAL_REPO/com/ibm/db2" -type f 2>/dev/null || true
+            exit 1
+          fi
+
+          if [ ! -f "$LOCAL_REPO/com/ibm/db2/db2jcc-license-ciusz/4.0/db2jcc-license-ciusz-4.0.jar" ]; then
+            echo "ERROR: com.ibm.db2:db2jcc-license-ciusz:4.0 was not installed locally."
+            find "$LOCAL_REPO/com/ibm/db2" -type f 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "DB2 dependencies are installed in local Maven repository."
 
       - name: Build and analyze
         shell: bash
@@ -238,7 +260,7 @@ jobs:
             exit 1
           fi
 
-          mvn -B -U -s "$MAVEN_SETTINGS_FILE" clean verify \
+          mvn -B -U -s "$MAVEN_SETTINGS_FILE" verify \
             org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey="$PROJECT_KEY" \
             -Dsonar.projectName="$PROJECT_NAME" \
