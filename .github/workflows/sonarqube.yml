@@ -4,12 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
-      - develop
+      - sonarqube_testing
   pull_request:
     branches:
-      - main
-      - develop
+      - sonarqube_testing
 
 permissions:
   contents: read
@@ -20,8 +18,8 @@ jobs:
     runs-on: [self-hosted, linux]
 
     env:
-      MAVEN_SETTINGS_FILE: ${{ runner.temp }}/maven/.m2/settings.xml
-      MAVEN_LOCAL_REPO: ${{ runner.temp }}/maven/.m2/repository
+      MAVEN_SETTINGS_FILE: .m2/settings.xml
+      MAVEN_LOCAL_REPO: .m2/repository
 
     steps:
       - name: Checkout source
@@ -30,7 +28,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Java
-        uses: github/actions/setup-java@main
+        uses: .github/actions/setup-java@main
         with:
           java-version: 17
 
@@ -43,6 +41,7 @@ jobs:
           echo "RUNNER_ARCH=${RUNNER_ARCH:-}"
           echo "RUNNER_NAME=${RUNNER_NAME:-}"
           echo "JAVA_HOME=${JAVA_HOME:-not set}"
+          echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE:-not set}"
           echo "MAVEN_SETTINGS_FILE=$MAVEN_SETTINGS_FILE"
           echo "MAVEN_LOCAL_REPO=$MAVEN_LOCAL_REPO"
 
@@ -78,10 +77,10 @@ jobs:
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
-          path: ${{ env.MAVEN_LOCAL_REPO }}
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml', 'lib/*.jar') }}
+          path: .m2/repository
+          key: m2-${{ hashFiles('**/pom.xml', 'lib/*.jar') }}
           restore-keys: |
-            ${{ runner.os }}-m2-
+            m2-
 
       - name: Write Maven settings.xml
         shell: bash
@@ -272,7 +271,7 @@ jobs:
           fi
 
           mvn -B -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" verify \
-            org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey="$PROJECT_KEY" \
             -Dsonar.projectName="$PROJECT_NAME" \
             -Dsonar.host.url="$SONAR_HOST_URL" \
