@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Java
-        uses: AD/xp-ghac.github/actions/setup-java@main
+        uses: github/actions/setup-java@main
         with:
           java-version: 17
 
