@@ -64,7 +64,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          MAVEN_HOME_DIR="${HOME:-$RUNNER_TEMP}"
+          if [ -z "${NEXUS_USERNAME:-}" ]; then
+            echo "ERROR: NEXUS_USERNAME secret is missing."
+            exit 1
+          fi
+
+          if [ -z "${NEXUS_PASSWORD:-}" ]; then
+            echo "ERROR: NEXUS_PASSWORD secret is missing."
+            exit 1
+          fi
+
+          if [ -z "${NEXUS_URL:-}" ]; then
+            echo "ERROR: NEXUS_URL secret is missing."
+            exit 1
+          fi
+
+          MAVEN_HOME_DIR="${HOME:-${RUNNER_TEMP:-/tmp}}"
           MAVEN_SETTINGS_DIR="$MAVEN_HOME_DIR/.m2"
           MAVEN_SETTINGS_FILE="$MAVEN_SETTINGS_DIR/settings.xml"
 
@@ -152,6 +167,16 @@ jobs:
           DB2_JCC_JAR="lib/db2jcc4-4.0.jar"
           DB2_LICENSE_JAR="lib/db2jcc-license-db2j-4.0.jar"
 
+          if [ -z "${MAVEN_SETTINGS_FILE:-}" ]; then
+            echo "ERROR: MAVEN_SETTINGS_FILE is not set."
+            exit 1
+          fi
+
+          if [ ! -f "$MAVEN_SETTINGS_FILE" ]; then
+            echo "ERROR: Maven settings file not found: $MAVEN_SETTINGS_FILE"
+            exit 1
+          fi
+
           if [ ! -f "$DB2_JCC_JAR" ]; then
             echo "ERROR: $DB2_JCC_JAR not found."
             echo "Current lib folder:"
@@ -166,14 +191,14 @@ jobs:
             exit 1
           fi
 
-          mvn -B install:install-file \
+          mvn -B -s "$MAVEN_SETTINGS_FILE" org.apache.maven.plugins:maven-install-plugin:2.4:install-file \
             -DgroupId=com.ibm.db2 \
             -DartifactId=jcc \
             -Dversion=4.0 \
             -Dpackaging=jar \
             -Dfile="$DB2_JCC_JAR"
 
-          mvn -B install:install-file \
+          mvn -B -s "$MAVEN_SETTINGS_FILE" org.apache.maven.plugins:maven-install-plugin:2.4:install-file \
             -DgroupId=com.ibm.db2 \
             -DartifactId=db2jcc-license-ciusz \
             -Dversion=4.0 \
@@ -192,6 +217,26 @@ jobs:
           PROJECT_NAME: ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
+
+          if [ -z "${SONAR_TOKEN:-}" ]; then
+            echo "ERROR: SONAR_TOKEN secret is missing."
+            exit 1
+          fi
+
+          if [ -z "${SONAR_HOST_URL:-}" ]; then
+            echo "ERROR: SONAR_HOST_URL secret is missing."
+            exit 1
+          fi
+
+          if [ -z "${MAVEN_SETTINGS_FILE:-}" ]; then
+            echo "ERROR: MAVEN_SETTINGS_FILE is not set."
+            exit 1
+          fi
+
+          if [ ! -f "$MAVEN_SETTINGS_FILE" ]; then
+            echo "ERROR: Maven settings file not found: $MAVEN_SETTINGS_FILE"
+            exit 1
+          fi
 
           mvn -B -U -s "$MAVEN_SETTINGS_FILE" clean verify \
             org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
