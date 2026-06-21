@@ -8,14 +8,19 @@ on:
   pull_request:
     branches:
       - sonarqube_testing
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   sonarqube:
     name: Build and SonarQube Scan
-    runs-on: [self-hosted, linux]
+    runs-on: arc
 
     env:
       MAVEN_SETTINGS_FILE: .m2/settings.xml
@@ -32,7 +37,10 @@ jobs:
         with:
           java-version: 17
 
-      - name: Verify Java and Maven
+      - name: Setup SonarScanner CLI
+        uses: AD/dxp-ghac/.github/actions/setup-sonar-scanner-cli@main
+
+      - name: Verify Java Maven and SonarScanner
         shell: bash
         run: |
           set -euo pipefail
@@ -42,11 +50,10 @@ jobs:
           echo "RUNNER_NAME=${RUNNER_NAME:-}"
           echo "JAVA_HOME=${JAVA_HOME:-not set}"
           echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE:-not set}"
-          echo "MAVEN_SETTINGS_FILE=$MAVEN_SETTINGS_FILE"
-          echo "MAVEN_LOCAL_REPO=$MAVEN_LOCAL_REPO"
 
           java -version
           mvn -version
+          sonar-scanner --version
 
           JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
           JAVA_MAJOR=$(echo "$JAVA_VERSION" | awk -F. '{ if ($1 == "1") print $2; else print $1 }')
@@ -245,27 +252,6 @@ jobs:
 
           echo "DB2 dependencies are installed in local Maven repository."
 
-      - name: Setup Oras
-        uses: AD/dxp-ghac/.github/actions/setup-oras@main
-        with:
-          registry-username: ${{ secrets.NEXUS_ECP_DXP_USER }}
-          registry-password: ${{ secrets.NEXUS_ECP_DXP_PASS }}
-
-      - name: Cache SonarQube packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: |
-            ${{ runner.os }}-sonar
-
-      - name: Install SonarScanner CLI
-        uses: AD/dxp-ghac/.github/actions/setup-sonar-scanner-cli@main
-        with:
-          registry-username: ${{ secrets.NEXUS_ECP_DXP_USER }}
-          registry-password: ${{ secrets.NEXUS_ECP_DXP_PASS }}
-          java-version: 17
-
       - name: Build application
         shell: bash
         run: |
@@ -273,49 +259,13 @@ jobs:
 
           mvn -B -s "$MAVEN_SETTINGS_FILE" -Dmaven.repo.local="$MAVEN_LOCAL_REPO" verify
 
-      - name: Ensure sonar-project.properties
-        shell: bash
-        env:
-          PROJECT_KEY: ${{ github.event.repository.name }}
-          PROJECT_NAME: ${{ github.event.repository.name }}
-        run: |
-          set -euo pipefail
-
-          if [ ! -f sonar-project.properties ]; then
-            cat > sonar-project.properties <<EOF_SONAR
-          sonar.projectKey=${PROJECT_KEY}
-          sonar.projectName=${PROJECT_NAME}
-          sonar.sources=src
-          sonar.java.binaries=target/classes
-          sonar.sourceEncoding=UTF-8
-          sonar.java.source=8
-          EOF_SONAR
-          fi
-
-          if ! grep -q '^sonar.projectKey=' sonar-project.properties; then
-            echo "sonar.projectKey=${PROJECT_KEY}" >> sonar-project.properties
-          fi
-
-          if ! grep -q '^sonar.projectName=' sonar-project.properties; then
-            echo "sonar.projectName=${PROJECT_NAME}" >> sonar-project.properties
-          fi
-
-          if ! grep -q '^sonar.java.binaries=' sonar-project.properties; then
-            echo "sonar.java.binaries=target/classes" >> sonar-project.properties
-          fi
-
-          if ! grep -q '^sonar.sourceEncoding=' sonar-project.properties; then
-            echo "sonar.sourceEncoding=UTF-8" >> sonar-project.properties
-          fi
-
-          echo "Final sonar-project.properties:"
-          cat sonar-project.properties
-
       - name: SonarQube scan
         shell: bash
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          PROJECT_KEY: ${{ github.event.repository.name }}
+          PROJECT_NAME: ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
 
@@ -325,12 +275,23 @@ jobs:
           fi
 
           if [ -z "${SONAR_HOST_URL:-}" ]; then
-            echo "ERROR: SONAR_HOST_URL variable is missing."
+            echo "ERROR: SONAR_HOST_URL secret is missing."
+            exit 1
+          fi
+
+          if [ ! -d "target/classes" ]; then
+            echo "ERROR: target/classes not found. Maven build did not generate compiled Java classes."
             exit 1
           fi
 
           echo "Using SONAR_HOST_URL=$SONAR_HOST_URL"
 
           sonar-scanner \
+            -Dsonar.projectKey="$PROJECT_KEY" \
+            -Dsonar.projectName="$PROJECT_NAME" \
+            -Dsonar.sources=src \
+            -Dsonar.java.binaries=target/classes \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.java.source=8 \
             -Dsonar.host.url="$SONAR_HOST_URL" \
             -Dsonar.token="$SONAR_TOKEN"
