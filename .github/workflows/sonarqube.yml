@@ -1,0 +1,152 @@
+name: SonarQube Analysis
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  sonarqube:
+    name: Build and SonarQube Scan
+    runs-on: [self-hosted, linux]
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify Java and Maven
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "JAVA_HOME=${JAVA_HOME:-}"
+          java -version
+          mvn -version
+
+          JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
+          JAVA_MAJOR=$(echo "$JAVA_VERSION" | awk -F. '{ if ($1 == "1") print $2; else print $1 }')
+
+          if [ -z "$JAVA_MAJOR" ]; then
+            echo "ERROR: Cannot detect Java major version from: $JAVA_VERSION"
+            exit 1
+          fi
+
+          if [ "$JAVA_MAJOR" -lt 17 ]; then
+            echo "ERROR: Java 17+ is required by the SonarQube scanner, but found Java $JAVA_VERSION"
+            echo "Ask the infra team to install Java 17 on the self-hosted runner or set JAVA_HOME to Java 17."
+            exit 1
+          fi
+
+          echo "Java $JAVA_VERSION detected. OK."
+
+      - name: Write Maven settings.xml
+        shell: bash
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          NEXUS_URL: ${{ secrets.NEXUS_URL }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/.m2"
+
+          xml_escape() {
+            printf '%s' "$1" \
+              | sed -e 's/&/\&amp;/g' \
+                    -e 's/</\&lt;/g' \
+                    -e 's/>/\&gt;/g' \
+                    -e 's/"/\&quot;/g' \
+                    -e "s/'/\&apos;/g"
+          }
+
+          NEXUS_USERNAME_ESCAPED=$(xml_escape "$NEXUS_USERNAME")
+          NEXUS_PASSWORD_ESCAPED=$(xml_escape "$NEXUS_PASSWORD")
+          NEXUS_URL_ESCAPED=$(xml_escape "$NEXUS_URL")
+
+          cat > "$HOME/.m2/settings.xml" <<EOF
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>nexus</id>
+                <username>${NEXUS_USERNAME_ESCAPED}</username>
+                <password>${NEXUS_PASSWORD_ESCAPED}</password>
+              </server>
+            </servers>
+
+            <mirrors>
+              <mirror>
+                <id>nexus</id>
+                <mirrorOf>*</mirrorOf>
+                <url>${NEXUS_URL_ESCAPED}</url>
+              </mirror>
+            </mirrors>
+
+            <profiles>
+              <profile>
+                <id>nexus-profile</id>
+                <repositories>
+                  <repository>
+                    <id>nexus</id>
+                    <url>${NEXUS_URL_ESCAPED}</url>
+                    <releases>
+                      <enabled>true</enabled>
+                    </releases>
+                    <snapshots>
+                      <enabled>true</enabled>
+                    </snapshots>
+                  </repository>
+                </repositories>
+                <pluginRepositories>
+                  <pluginRepository>
+                    <id>nexus</id>
+                    <url>${NEXUS_URL_ESCAPED}</url>
+                    <releases>
+                      <enabled>true</enabled>
+                    </releases>
+                    <snapshots>
+                      <enabled>true</enabled>
+                    </snapshots>
+                  </pluginRepository>
+                </pluginRepositories>
+              </profile>
+            </profiles>
+
+            <activeProfiles>
+              <activeProfile>nexus-profile</activeProfile>
+            </activeProfiles>
+          </settings>
+          EOF
+
+          echo "Maven settings.xml created at $HOME/.m2/settings.xml"
+
+      - name: Build and analyze
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          PROJECT_KEY: ${{ github.event.repository.name }}
+          PROJECT_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+
+          mvn -B verify \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.projectKey="$PROJECT_KEY" \
+            -Dsonar.projectName="$PROJECT_NAME" \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.java.source=8 \
+            -Dsonar.scm.provider=git
